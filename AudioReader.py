@@ -16,6 +16,17 @@ def mp3_paths():
             names.append(file)
     return paths, names
 
+def wav_paths():
+    """
+    Prints all files in wav folder
+    :return: Tuple of full paths and names of wav files
+    """
+    paths, names = [], []
+    for file in os.listdir(WAV_FOLDER):
+        if file.endswith(".wav"):
+            paths.append(os.path.abspath(os.path.join(WAV_FOLDER, file)))
+            names.append(file)
+    return paths, names
 
 def convert_mp3_to_wav():
     """
@@ -34,4 +45,5 @@ def convert_mp3_to_wav():
                              '-r', '48k', wav_path, 'remix', '1,2'])
 
 
-convert_mp3_to_wav()
+if __name__ == "__main__":
+    convert_mp3_to_wav()
