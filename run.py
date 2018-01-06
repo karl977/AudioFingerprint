@@ -1,9 +1,6 @@
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
 import numpy as np
-import scipy.io.wavfile as wav
-from scipy.ndimage.filters import maximum_filter
-from scipy.ndimage.morphology import (generate_binary_structure, iterate_structure, binary_erosion)
+from AudioSample import AudioSample
 from Database import DbHelper
 import AudioReader
 
@@ -11,76 +8,32 @@ import FingerPrint
 
 db = DbHelper()
 
-MIN_AMP = 10
-PEAK_NEIGHBORHOOD = 20
-
-# Peak finding function from
-# https://github.com/worldveil/dejavu/blob/master/dejavu/decoder.py
-def get_2D_peaks(arr2D, amp_min=MIN_AMP):
-
-    struct = generate_binary_structure(2, 1)
-    neighborhood = iterate_structure(struct, PEAK_NEIGHBORHOOD)
-
-    # find local maxima using our filter shape
-    local_max = maximum_filter(arr2D, footprint=neighborhood) == arr2D
-    background = (arr2D == 0)
-    eroded_background = binary_erosion(background, structure=neighborhood, border_value=1)
-
-    # Boolean mask of arr2D with True at peaks
-    detected_peaks = local_max - eroded_background
-
-    # extract peaks
-    amps = arr2D[detected_peaks]
-    j, i = np.where(detected_peaks)
-
-    # filter peaks
-    amps = amps.flatten()
-    peaks = zip(i, j, amps)
-    peaks_filtered = [x for x in peaks if x[2] > amp_min]  # freq, time, amp
-
-    # get indices for frequency and time
-    frequency_idx = [x[1] for x in peaks_filtered]
-    time_idx = [x[0] for x in peaks_filtered]
-
-    return frequency_idx, time_idx
-
-
-
 def test():
     audiopath = "wav/all_my_life.wav"
+    song_name = "all_my_life.wav"
+    song_id = db.get_song_id(song_name)
 
-    samplerate, samples = wav.read(audiopath)
 
-    # FFT the signal and extract frequency components
-    wsize = 4096  # Window size for FFT
-    wratio = 0.9  # Overlap ration fo FFT
+    audio_sample = AudioSample(audiopath, 0, 10)
 
-    fs = samplerate
-    # First 20 seconds
-    ed = fs * 60
-    samples = samples[:ed]
+    data = audio_sample.get_peaks()
+    peaks = data[0]
+    spectrum = data[1]
+    t = data[2]
+    freqs = data[3]
 
-    print("Creating spectragram")
-    spectrum, freqs, t = mlab.specgram(samples, NFFT=wsize, Fs=fs,
-                                       window=mlab.window_hanning, noverlap=int(wsize * wratio))
-
-    # convert values do decibel
-    spectrum = 10 * np.log10(spectrum)
-    spectrum[spectrum == -np.inf] = 0  # replace infs with zeros
-
-    peaks = get_2D_peaks(arr2D=spectrum, amp_min=5)
     print("Found %d peaks" % len(peaks[0]))
 
     # Save peak hashes to database
-    hash_generator = FingerPrint.hash_sequential(peaks, spectrum, t, freqs)
-    tot = 0
-    for data in hash_generator:
-        hsh, time = FingerPrint.get_hash(data[0], data[1])
-        db.insert_seq_hash(hsh, time)
-        tot += 1
-    print("Total hashes saved %d" % tot)
+    # hash_generator = FingerPrint.hash_sequential(peaks, spectrum, t, freqs)
+    # tot = 0
+    # for data in hash_generator:
+    #     hsh, time = FingerPrint.get_hashstr_sequential(data[0], data[1])
+    #     db.insert_seq_hash(song_id, hsh, time)
+    #     tot += 1
+    # print("Total hashes saved %d" % tot)
 
-    return
+    #return
 
     plt.figure(figsize=(15, 7.5))
     plt.imshow(spectrum, origin="lower", aspect="auto", cmap="jet", interpolation="none")
@@ -94,8 +47,10 @@ def test():
     plt.colorbar()
     plt.show()
 
+#test()
+#exit(0)
 
-def process_all_songs():
+def process_all_songs_seq():
     paths, names = AudioReader.wav_paths()
     ids = []
     db.drop_tables()  # Delete previous data
@@ -104,69 +59,104 @@ def process_all_songs():
         ids.append(db.insert_song(names[i]))
 
     for i in range(len(paths)):
-        save_fingerprints_to_DB(paths[i], names[i], ids[i])
+        save_fingerprints_to_DB_seq(paths[i], names[i], ids[i])
 
 
-def save_fingerprints_to_DB(path, song_name, song_id):
+def save_fingerprints_to_DB_seq(path, song_name, song_id):
     print("\nProcessing %s" % song_name)
 
-    # Fingerprint only first 30 seconds
-    peaks, spectrum, t, freqs = get_peaks(path, 0, 30)
+    audio_sample = AudioSample(path, 0, 100)
+    peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
     # Save peak hashes to database
     hash_generator = FingerPrint.hash_sequential(peaks, spectrum, t, freqs)
     tot = 0
     for data in hash_generator:
-        hsh, time = FingerPrint.get_hash(data[0], data[1])
+        hsh, time = FingerPrint.get_hashstr_sequential(data[0], data[1])
         db.insert_seq_hash(song_id, hsh, time)
         tot += 1
     print("%d hashes saved for %s" % (tot, song_name))
 
 
-def get_peaks(audio_path, start_time=0, end_time=None):
-    samplerate, samples = wav.read(audio_path)
 
-    # FFT the signal and extract frequency components
-    wsize = 4096  # Window size for FFT
-    wratio = 0.9  # Overlap ration fo FFT
 
-    fs = samplerate
-    start = fs * start_time
-    end = len(samples) if end_time is None else fs * end_time
-
-    samples = samples[start:end]  # Cut song
-
-    print("Creating spectrogram")
-    spectrum, freqs, t = mlab.specgram(samples, NFFT=wsize, Fs=fs,
-                                       window=mlab.window_hanning, noverlap=int(wsize * wratio))
-
-    spectrum = 10 * np.log10(spectrum)  # convert values do dB
-    spectrum[spectrum == -np.inf] = 0   # replace infs with zeros
-    print("Finding peaks")
-    peaks = get_2D_peaks(arr2D=spectrum, amp_min=5)
-    print("Found %d peaks" % len(peaks[0]))
-
-    return peaks, spectrum, t, freqs
 
 def count_matches():
     audiopath = "wav/all_my_life.wav"
     song_name = "all_my_life.wav"
     song_id = db.get_song_id(song_name)
 
+    audio_sample = AudioSample(audiopath, 0, 10)
+    peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
-    peaks, spectrum, t, freqs = get_peaks(audiopath, 10, 30)
     hash_generator = FingerPrint.hash_sequential(peaks, spectrum, t, freqs)
-
+    print(spectrum.shape)
+    print(t[0:10])
     tot = 0
     for data in hash_generator:
-        hsh, time = FingerPrint.get_hash(data[0], data[1])
-        tot += db.get_hash_count(hsh)
+        hsh, time = FingerPrint.get_hashstr_sequential(data[0], data[1])
+        tot += db.get_seq_hash_count(hsh)
     print("All hash matches %d" % tot)
 
     for data in hash_generator:
-        hsh, time = FingerPrint.get_hash(data[0], data[1])
-        tot += db.get_hash_count_by_song(hsh, song_id)
+        hsh, time = FingerPrint.get_hashstr_sequential(data[0], data[1])
+        tot += db.get_seq_hash_count_by_song(hsh, song_id)
     print("Correct song hash matches %d" % tot)
 
-process_all_songs()
-count_matches()
+#process_all_songs()
+#count_matches()
+
+def process_all_songs_win():
+    paths, names = AudioReader.wav_paths()
+    ids = []
+    db.drop_tables()  # Delete previous data
+    db.create_tables()
+    for i in range(len(names)):
+        ids.append(db.insert_song(names[i]))
+
+    for i in range(len(paths)):
+        save_fingerprints_to_DB_win(paths[i], names[i], ids[i])
+
+
+def save_fingerprints_to_DB_win(path, song_name, song_id):
+    print("\nProcessing %s" % song_name)
+
+    audio_sample = AudioSample(path, 0, 100)
+    spectrum, t, freqs = audio_sample.get_spectrum()
+
+    # Save peak hashes to database
+    hash_generator = FingerPrint.hash_window(spectrum, t, freqs)
+    tot = 0
+    for data in hash_generator:
+        hsh, time = FingerPrint.get_hashstr_window(data[0], data[1], data[2], data[3])
+        db.insert_win_hash(song_id, hsh, time)
+        tot += 1
+    print("%d hashes saved for %s" % (tot, song_name))
+
+
+
+def count_win_matches():
+    audiopath = "wav/all_my_life.wav"
+    song_name = "all_my_life.wav"
+    song_id = db.get_song_id(song_name)
+
+    audio_sample = AudioSample(audiopath, 10, 20)
+    spectrum, t, freqs = audio_sample.get_spectrum()
+
+    hash_generator = FingerPrint.hash_window(spectrum, t, freqs)
+
+    tot = 0
+    for data in hash_generator:
+        hsh, time = FingerPrint.get_hashstr_window(data[0], data[1], data[2], data[3])
+        count = db.get_win_hash_count(hsh)
+        if count > 1: print("Duplicate")
+        tot += count
+    print("All hash matches %d" % tot)
+
+    for data in hash_generator:
+        hsh, time = FingerPrint.get_hashstr_window(data[0], data[1], data[2], data[3])
+        tot += db.get_win_hash_count_by_song(hsh, song_id)
+    print("Correct song hash matches %d" % tot)
+
+process_all_songs_win()
+count_win_matches()

@@ -8,6 +8,7 @@ class DbHelper:
 
         self.songs_table = "songs"
         self.seq_hashes_table = "seq_hashes"
+        self.window_hashes = "win_hashes"
         self.anchor_hashes = "anc_hashes"
 
         self.create_tables()
@@ -30,9 +31,15 @@ class DbHelper:
               ' (song_id INTEGER, hash BLOB, time INTEGER)'
         c.execute(sql)
 
+        sql = 'create table if not exists ' + self.window_hashes + \
+              ' (song_id INTEGER, hash BLOB, time INTEGER)'
+        c.execute(sql)
+
         sql = 'create table if not exists ' + self.anchor_hashes + \
               ' (song_id INTEGER, hash BLOB, time INTEGER)'
         c.execute(sql)
+
+
         self.conn.commit()
 
     def insert_song(self, song_name):
@@ -70,7 +77,7 @@ class DbHelper:
         " WHERE hash in (SELECT  hash FROM " + table + \
         " GROUP BY hash HAVING COUNT(*) > 1);"
 
-    def get_hash_count(self, hash):
+    def get_seq_hash_count(self, hash):
         c = self.conn.cursor()
         sql = '''SELECT COUNT(*) FROM seq_hashes WHERE hash = ?'''
         c.execute(sql, [hash])
@@ -78,13 +85,30 @@ class DbHelper:
         result = c.fetchone()
         return result[0]
 
-    def get_hash_count_by_song(self, hash, song_id):
+    def get_seq_hash_count_by_song(self, hash, song_id):
         c = self.conn.cursor()
         sql = '''SELECT COUNT(*) FROM seq_hashes WHERE hash = ? and song_id = ?'''
         c.execute(sql, [hash, song_id])
 
         result = c.fetchone()
         return result[0]
+
+    def get_win_hash_count(self, hash):
+        c = self.conn.cursor()
+        sql = '''SELECT COUNT(*) FROM win_hashes WHERE hash = ?'''
+        c.execute(sql, [hash])
+
+        result = c.fetchone()
+        return result[0]
+
+    def get_win_hash_count_by_song(self, hash, song_id):
+        c = self.conn.cursor()
+        sql = '''SELECT COUNT(*) FROM win_hashes WHERE hash = ? and song_id = ?'''
+        c.execute(sql, [hash, song_id])
+
+        result = c.fetchone()
+        return result[0]
+
 
     def get_song_id(self, song_name):
         c = self.conn.cursor()
@@ -97,6 +121,13 @@ class DbHelper:
     def insert_seq_hash(self, song_id, hash, time):
         c = self.conn.cursor()
         sql = ''' INSERT INTO seq_hashes (song_id, hash, time) VALUES (?, ?, ?) '''
+        c.execute(sql, [song_id, hash, time])
+        self.conn.commit()
+        pass
+
+    def insert_win_hash(self, song_id, hash, time):
+        c = self.conn.cursor()
+        sql = ''' INSERT INTO win_hashes (song_id, hash, time) VALUES (?, ?, ?) '''
         c.execute(sql, [song_id, hash, time])
         self.conn.commit()
         pass
