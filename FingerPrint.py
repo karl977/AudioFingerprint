@@ -103,9 +103,10 @@ def hash_window(spectrum, t, freq):
 
         last_max_time, last_max_freq = max_idx[0], max_idx[1]
 
+
 def get_hashstr_window(time1, time2, freq1, freq2):
     """
-    Calculates hash with four consecutive frequencies
+    Calculates hash for each node and the following window
     """
     time_dif = time2 - time1
     tp = (str(freq1), str(freq2), str(time_dif))
@@ -113,12 +114,71 @@ def get_hashstr_window(time1, time2, freq1, freq2):
 
     return hash_ob.digest()[:HASHLEN], time1
 
+
+FAN_OUT = 10        # Each peak will be hashed together with at most 10 other peaks
+ZONE_DELAY = 100    # Start of target zone 10ms after peak
+ZONE_LEN = 1000     # Length of the zone in ms
+ZONE_HEIGHT = 1000  # Height of the zone in hertz
 """
 Find highest peak in a time and frequency-window
 Pair found peak with top 10 highest peaks which occur up to 100ms after the peak
-and whose frequency is between x-500 and x+500 Hz
+and whose frequency is between x-1250 and x+1250 Hz
 
 For each such pair hash their frequencies and the time between them 
 """
-def hash_anchors(peaks, spectrum, t, freq):
-    pass
+
+
+@jit
+def hash_anchor(peaks, spectrum, t, freq):
+    zh2 = ZONE_HEIGHT//2
+    zl2 = ZONE_LEN//2
+
+    freq = freq[peaks[0]]
+    times = t[peaks[1]]
+    # Sort peaks by time
+    sort_order = np.argsort(times)
+    peak_times = times[sort_order]
+    peak_freq = freq[sort_order]
+    # Rounding
+    peak_freq = np.around(peak_freq, -1)  # Round frequencies to nearest 10
+    peak_times = np.around(peak_times * 1000, -1)  # Round times to nearest 10 ms
+
+    open_peaks = []
+    pair_counts = []
+    start_idx = 0  # Index for starting the search
+
+    results = []
+
+    for i in range(len(peak_times)):
+        cur_time = peak_times[i]  # Peaks are sorted by time
+        cur_freq = peak_freq[i]
+        peak = (cur_time, cur_freq)
+        for j in range(start_idx, len(open_peaks)):
+            anchor_time, anchor_freq = open_peaks[j]
+            if anchor_time + ZONE_DELAY + ZONE_LEN > cur_time:         # Current peak in zone
+                if anchor_time + ZONE_DELAY < cur_time:                # If peak is delayed enough
+                    if cur_freq - zh2 < anchor_freq < cur_freq + zh2:  # If frequency in range
+                        if pair_counts[j] < FAN_OUT:                   # If fan_out limit hasn't been reached
+                            pair_counts[j] += 1
+                            results.append((get_hashstr_anchor(anchor_time, cur_time, anchor_freq, cur_freq), anchor_time))
+            else:
+                # Start next time from a node which could be in time zone
+                start_idx = j
+
+        open_peaks.append(peak)  # Add new peak to open list
+        pair_counts.append(0)
+
+        if len(results) + 1 % 1001 == 0:
+            print(len(results))
+
+    return results
+
+def get_hashstr_anchor(time1, time2, freq1, freq2):
+    """
+    Calculates hash for each node and the following window
+    """
+    time_dif = time2 - time1
+    tp = (str(freq1), str(freq2), str(time_dif))
+    hash_ob = hashlib.sha1(str("%s %s %s" % tp).encode('utf-8'))
+
+    return hash_ob.digest()[:HASHLEN]

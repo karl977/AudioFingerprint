@@ -101,6 +101,14 @@ class DbHelper:
         result = c.fetchone()
         return result[0]
 
+    def get_anc_hash_count(self, hash):
+        c = self.conn.cursor()
+        sql = '''SELECT COUNT(*) FROM anc_hashes WHERE hash = ?'''
+        c.execute(sql, [hash])
+
+        result = c.fetchone()
+        return result[0]
+
     def get_win_hash_count_by_song(self, hash, song_id):
         c = self.conn.cursor()
         sql = '''SELECT COUNT(*) FROM win_hashes WHERE hash = ? and song_id = ?'''
@@ -109,6 +117,13 @@ class DbHelper:
         result = c.fetchone()
         return result[0]
 
+    def get_anc_hash_count_by_song(self, hash, song_id):
+        c = self.conn.cursor()
+        sql = '''SELECT COUNT(*) FROM anc_hashes WHERE hash = ? and song_id = ?'''
+        c.execute(sql, [ hash, song_id])
+
+        result = c.fetchone()
+        return result[0]
 
     def get_song_id(self, song_name):
         c = self.conn.cursor()
@@ -131,6 +146,22 @@ class DbHelper:
         c.execute(sql, [song_id, hash, time])
         self.conn.commit()
         pass
+
+    def insert_anchor_hash(self, song_id, hash, time):
+        c = self.conn.cursor()
+        sql = ''' INSERT INTO anc_hashes (song_id, hash, time) VALUES (?, ?, ?) '''
+        c.execute(sql, [song_id, hash, time])
+        self.conn.commit()
+        pass
+
+    def insert_anc_bulk(self, song_id, hashes):
+        c = self.conn.cursor()
+        sql = ''' INSERT INTO anc_hashes (song_id, hash, time) VALUES (?, ?, ?) '''
+
+        c.execute('BEGIN TRANSACTION')
+        for hsh in hashes:
+            c.execute(sql, [song_id, hsh[0], hsh[1]])
+        c.execute('COMMIT')
 
     def drop_tables(self):
         c = self.conn.cursor()

@@ -158,5 +158,60 @@ def count_win_matches():
         tot += db.get_win_hash_count_by_song(hsh, song_id)
     print("Correct song hash matches %d" % tot)
 
-process_all_songs_win()
-count_win_matches()
+#process_all_songs_win()
+#count_win_matches()
+
+def process_all_songs_anchor():
+    paths, names = AudioReader.wav_paths()
+    ids = []
+    db.drop_tables()  # Delete previous data
+    db.create_tables()
+    for i in range(len(names)):
+        ids.append(db.insert_song(names[i]))
+
+    for i in range(len(paths)):
+        save_fingerprints_to_DB_anchor(paths[i], names[i], ids[i])
+
+from time import sleep
+
+def save_fingerprints_to_DB_anchor(path, song_name, song_id):
+    print("\nProcessing %s" % song_name)
+
+    audio_sample = AudioSample(path, 0, 30)
+    peaks, spectrum, t, freqs = audio_sample.get_peaks()
+
+    # Save peak hashes to database
+    hashes = FingerPrint.hash_anchor(peaks, spectrum, t, freqs)
+    db.insert_anc_bulk(song_id, hashes)
+
+    print("%d hashes saved for %s" % (len(hashes), song_name))
+
+
+
+def count_anchor_matches():
+    audiopath = "wav/all_my_life.wav"
+    song_name = "all_my_life.wav"
+    song_id = db.get_song_id(song_name)
+
+    audio_sample = AudioSample(audiopath)
+    peaks, spectrum, t, freqs = audio_sample.get_peaks()
+
+    hashes = FingerPrint.hash_anchor(peaks, spectrum, t, freqs)
+
+    tot = 0
+    for row in hashes:
+        hsh, time = row[0], row[1]
+        count = db.get_anc_hash_count(hsh)
+        if count > 1: print("Duplicate")
+        tot += count
+    print("All hash matches %d" % tot)
+
+    tot = 0
+    for row in hashes:
+        hsh, time = row[0], row[1]
+        tot += db.get_anc_hash_count_by_song(hsh, song_id)
+    print("Correct song hash matches %d" % tot)
+
+
+#process_all_songs_anchor()
+count_anchor_matches()
