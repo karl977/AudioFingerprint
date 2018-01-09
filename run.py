@@ -136,8 +136,9 @@ def process_all_songs_anchor():
 
 def save_fingerprints_to_DB_anchor(path, song_name, song_id):
     print("\nProcessing %s" % song_name)
-    # Fingerprints only first 3 minutes of a song due to high memory usage
-    audio_sample = AudioSample(path, 0, 60)
+    # Fingerprints only first 3 minutes of a song due to
+    # the high memory requirements of the matlab specgram function
+    audio_sample = AudioSample(path, 0, 180)
     peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
     # Save peak hashes to database
@@ -150,11 +151,12 @@ import operator
 
 def count_anchor_matches():
     #audiopath = "wav/rec/all_my_life_0.10-0.20.wav"
-    audiopath = "wav/rec/ring_of_fire_0.10-0.20.wav"
+    #audiopath = "wav/rec/ring_of_fire_0.10-0.20.wav"
+    audiopath = "wav/rec/paint_it_black_noise+clipping.wav"
     song_name = "all_my_life.wav"
     song_id = db.get_song_id(song_name)
 
-    audio_sample = AudioSample(audiopath)
+    audio_sample = AudioSample(audiopath, 2, 12)
     peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
     hashes = FingerPrint.hash_anchor(peaks, spectrum, t, freqs)
@@ -182,11 +184,14 @@ def count_anchor_matches():
 
 
 
+if __name__ == "__main__":
+    #process_all_songs_anchor()
+    song_id, sample, hashes = count_anchor_matches()
 
-#process_all_songs_anchor()
-song_id, sample, hashes = count_anchor_matches()
-PlotSample.plot_matches(song_id, hashes)
+    # Plot matches hashes from sample vs correct song
+    #PlotSample.plot_matches(song_id, hashes)
 
-#all = db.count_anc_hashes()
-#duplicates = db.count_anc_duplicate_hashes()
-#print("%d duplicates from total %d hash values" % (duplicates, all))
+    # Count duplicates
+    #all = db.count_anc_hashes()
+    #duplicates = db.count_anc_duplicate_hashes()
+    #print("%d duplicates from total %d hash values" % (duplicates, all))
