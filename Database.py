@@ -28,15 +28,15 @@ class DbHelper:
         c.execute(sql)
 
         sql = 'create table if not exists ' + self.seq_hashes_table + \
-              ' (song_id INTEGER, hash BLOB, time INTEGER)'
+              ' (song_id INTEGER, hash INTEGER, time INTEGER)'
         c.execute(sql)
 
         sql = 'create table if not exists ' + self.window_hashes + \
-              ' (song_id INTEGER, hash BLOB, time INTEGER)'
+              ' (song_id INTEGER, hash INTEGER, time INTEGER)'
         c.execute(sql)
 
         sql = 'create table if not exists ' + self.anchor_hashes + \
-              ' (song_id INTEGER, hash BLOB, time INTEGER)'
+              ' (song_id INTEGER, hash INTEGER, time INTEGER)'
         c.execute(sql)
 
 
@@ -60,13 +60,23 @@ class DbHelper:
         self.conn.commit()
         return c.lastrowid
 
-    def count_duplicate_hashes(self, table):
+    def count_anc_duplicate_hashes(self):
         c = self.conn.cursor()
         sql = '''SELECT SUM(count) FROM (SELECT COUNT(hash) as count 
-                  FROM ? GROUP BY hash HAVING COUNT(*) > 1)'''
-        c.execute(sql, [table])
+                  FROM anc_hashes GROUP BY hash HAVING COUNT(*) > 1)'''
+        c.execute(sql, [])
         result = c.fetchone()
 
+        if result:
+            return result[0]
+        else:
+            return 0
+
+    def count_anc_hashes(self):
+        c = self.conn.cursor()
+        sql = '''SELECT COUNT(*) FROM anc_hashes'''
+        c.execute(sql)
+        result = c.fetchone()
         if result:
             return result[0]
         else:
@@ -109,6 +119,13 @@ class DbHelper:
         result = c.fetchone()
         return result[0]
 
+    def get_song_match_count(self, hash):
+        c = self.conn.cursor()
+        sql = '''SELECT song_id, COUNT(*) FROM anc_hashes  WHERE hash = ? GROUP BY song_id'''
+        c.execute(sql, [hash])
+        result = c.fetchall()
+        return result
+
     def get_win_hash_count_by_song(self, hash, song_id):
         c = self.conn.cursor()
         sql = '''SELECT COUNT(*) FROM win_hashes WHERE hash = ? and song_id = ?'''
@@ -120,15 +137,37 @@ class DbHelper:
     def get_anc_hash_count_by_song(self, hash, song_id):
         c = self.conn.cursor()
         sql = '''SELECT COUNT(*) FROM anc_hashes WHERE hash = ? and song_id = ?'''
-        c.execute(sql, [ hash, song_id])
+        c.execute(sql, [hash, song_id])
 
         result = c.fetchone()
         return result[0]
+
+    def get_anc_hashes(self, song_id):
+        c = self.conn.cursor()
+        sql = '''SELECT hash FROM anc_hashes'''
+
+    def get_anc_hash_times(self, hsh, song_id):
+        c = self.conn.cursor()
+        sql = '''SELECT time FROM anc_hashes WHERE hash = ? and song_id = ?'''
+        c.execute(sql, [hsh, song_id])
+        result = c.fetchall()
+        if result:
+            return result
+        else:
+            return []
 
     def get_song_id(self, song_name):
         c = self.conn.cursor()
         sql = '''SELECT id FROM songs WHERE name = ?'''
         c.execute(sql, [song_name])
+
+        result = c.fetchone()
+        return result[0]
+
+    def get_song_name(self, song_id):
+        c = self.conn.cursor()
+        sql = '''SELECT name FROM songs WHERE id = ?'''
+        c.execute(sql, [song_id])
 
         result = c.fetchone()
         return result[0]
@@ -162,6 +201,7 @@ class DbHelper:
         for hsh in hashes:
             c.execute(sql, [song_id, hsh[0], hsh[1]])
         c.execute('COMMIT')
+
 
     def drop_tables(self):
         c = self.conn.cursor()

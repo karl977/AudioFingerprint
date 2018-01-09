@@ -3,49 +3,11 @@ import numpy as np
 from AudioSample import AudioSample
 from Database import DbHelper
 import AudioReader
-
+import PlotSample
 import FingerPrint
 
 db = DbHelper()
 
-def test():
-    audiopath = "wav/all_my_life.wav"
-    song_name = "all_my_life.wav"
-    song_id = db.get_song_id(song_name)
-
-
-    audio_sample = AudioSample(audiopath, 0, 10)
-
-    data = audio_sample.get_peaks()
-    peaks = data[0]
-    spectrum = data[1]
-    t = data[2]
-    freqs = data[3]
-
-    print("Found %d peaks" % len(peaks[0]))
-
-    # Save peak hashes to database
-    # hash_generator = FingerPrint.hash_sequential(peaks, spectrum, t, freqs)
-    # tot = 0
-    # for data in hash_generator:
-    #     hsh, time = FingerPrint.get_hashstr_sequential(data[0], data[1])
-    #     db.insert_seq_hash(song_id, hsh, time)
-    #     tot += 1
-    # print("Total hashes saved %d" % tot)
-
-    #return
-
-    plt.figure(figsize=(15, 7.5))
-    plt.imshow(spectrum, origin="lower", aspect="auto", cmap="jet", interpolation="none")
-
-    xlocs = np.arange(0, len(t), 200)
-    plt.xticks(xlocs, ["%.02f" % t[l] for l in xlocs])
-    ylocs = np.arange(0, len(freqs), 100)
-    plt.yticks(ylocs, ["%.02f" % freqs[i] for i in ylocs])
-
-    plt.plot(peaks[1], peaks[0], "ro")
-    plt.colorbar()
-    plt.show()
 
 #test()
 #exit(0)
@@ -76,9 +38,6 @@ def save_fingerprints_to_DB_seq(path, song_name, song_id):
         db.insert_seq_hash(song_id, hsh, time)
         tot += 1
     print("%d hashes saved for %s" % (tot, song_name))
-
-
-
 
 
 def count_matches():
@@ -172,12 +131,13 @@ def process_all_songs_anchor():
     for i in range(len(paths)):
         save_fingerprints_to_DB_anchor(paths[i], names[i], ids[i])
 
-from time import sleep
+    duplicates = db.count_anc_duplicate_hashes()
+    print("%d total duplicate hash values" % duplicates)
 
 def save_fingerprints_to_DB_anchor(path, song_name, song_id):
     print("\nProcessing %s" % song_name)
-
-    audio_sample = AudioSample(path, 0, 30)
+    # Fingerprints only first 3 minutes of a song due to high memory usage
+    audio_sample = AudioSample(path, 0, 60)
     peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
     # Save peak hashes to database
@@ -186,10 +146,11 @@ def save_fingerprints_to_DB_anchor(path, song_name, song_id):
 
     print("%d hashes saved for %s" % (len(hashes), song_name))
 
-
+import operator
 
 def count_anchor_matches():
-    audiopath = "wav/all_my_life.wav"
+    #audiopath = "wav/rec/all_my_life_0.10-0.20.wav"
+    audiopath = "wav/rec/ring_of_fire_0.10-0.20.wav"
     song_name = "all_my_life.wav"
     song_id = db.get_song_id(song_name)
 
@@ -197,21 +158,35 @@ def count_anchor_matches():
     peaks, spectrum, t, freqs = audio_sample.get_peaks()
 
     hashes = FingerPrint.hash_anchor(peaks, spectrum, t, freqs)
+    print("Created %d hashes from sample" % len(hashes))
 
-    tot = 0
+    song_counts = {}
     for row in hashes:
         hsh, time = row[0], row[1]
-        count = db.get_anc_hash_count(hsh)
-        if count > 1: print("Duplicate")
-        tot += count
-    print("All hash matches %d" % tot)
+        counts = db.get_song_match_count(hsh)
+        for song_row in counts:
+            s_id, count = song_row[0], song_row[1]
+            if s_id not in song_counts:
+                song_counts[s_id] = count
+            else:
+                song_counts[s_id] += count
 
-    tot = 0
-    for row in hashes:
-        hsh, time = row[0], row[1]
-        tot += db.get_anc_hash_count_by_song(hsh, song_id)
-    print("Correct song hash matches %d" % tot)
+    sorted_counts = sorted(song_counts.items(), key=operator.itemgetter(1))
+    sorted_counts.reverse()
+    for song_count in sorted_counts:
+        s_id, count = song_count[0], song_count[1]
+        song_name = db.get_song_name(s_id)
+        print("%d matches in %s" % (count, song_name))
+
+    return sorted_counts[0][0], audio_sample, hashes  # Return song with highest amount of matches
+
+
 
 
 #process_all_songs_anchor()
-count_anchor_matches()
+song_id, sample, hashes = count_anchor_matches()
+PlotSample.plot_matches(song_id, hashes)
+
+#all = db.count_anc_hashes()
+#duplicates = db.count_anc_duplicate_hashes()
+#print("%d duplicates from total %d hash values" % (duplicates, all))

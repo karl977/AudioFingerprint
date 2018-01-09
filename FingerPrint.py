@@ -10,7 +10,7 @@ FREQUENY_RANGES = (500,  1000, 1500, 2000, 2500, 3000, 3500, 4000, 10000000)
 TOT_RANGES = len(FREQUENY_RANGES)
 
 # Length of hash string
-HASHLEN = 20
+HASHLEN = 25
 
 @jit(nopython=True)
 def get_range_idx(freq):
@@ -119,26 +119,27 @@ FAN_OUT = 10        # Each peak will be hashed together with at most 10 other pe
 ZONE_DELAY = 100    # Start of target zone 10ms after peak
 ZONE_LEN = 1000     # Length of the zone in ms
 ZONE_HEIGHT = 1000  # Height of the zone in hertz
-"""
-Find highest peak in a time and frequency-window
-Pair found peak with top 10 highest peaks which occur up to 100ms after the peak
-and whose frequency is between x-1250 and x+1250 Hz
-
-For each such pair hash their frequencies and the time between them 
-"""
-
 
 @jit
 def hash_anchor(peaks, spectrum, t, freq):
+    """
+    Find highest peak in a time and frequency-window
+    Pair found peak with top 10 highest peaks which occur up to 100ms after the peak
+    and whose frequency is between f-500 and f+500 Hz
+
+    For each such pair hash their frequencies and the time difference between them
+    """
     zh2 = ZONE_HEIGHT//2
     zl2 = ZONE_LEN//2
 
     freq = freq[peaks[0]]
     times = t[peaks[1]]
+
     # Sort peaks by time
     sort_order = np.argsort(times)
     peak_times = times[sort_order]
     peak_freq = freq[sort_order]
+
     # Rounding
     peak_freq = np.around(peak_freq, -1)  # Round frequencies to nearest 10
     peak_times = np.around(peak_times * 1000, -1)  # Round times to nearest 10 ms
@@ -173,12 +174,15 @@ def hash_anchor(peaks, spectrum, t, freq):
 
     return results
 
+import ctypes
 def get_hashstr_anchor(time1, time2, freq1, freq2):
     """
     Calculates hash for each node and the following window
+    Returns unsigned integer of the hash
     """
     time_dif = time2 - time1
     tp = (str(freq1), str(freq2), str(time_dif))
     hash_ob = hashlib.sha1(str("%s %s %s" % tp).encode('utf-8'))
 
-    return hash_ob.digest()[:HASHLEN]
+    int_val = int.from_bytes(hash_ob.digest(), 'big')
+    return ctypes.c_uint32(int_val)
