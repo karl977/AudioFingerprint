@@ -5,12 +5,10 @@ from Database import DbHelper
 import AudioReader
 import PlotSample
 import FingerPrint
+import operator
 
 db = DbHelper()
 
-
-#test()
-#exit(0)
 
 def process_all_songs_seq():
     paths, names = AudioReader.wav_paths()
@@ -117,8 +115,6 @@ def count_win_matches():
         tot += db.get_win_hash_count_by_song(hsh, song_id)
     print("Correct song hash matches %d" % tot)
 
-#process_all_songs_win()
-#count_win_matches()
 
 def process_all_songs_anchor():
     paths, names = AudioReader.wav_paths()
@@ -147,14 +143,11 @@ def save_fingerprints_to_DB_anchor(path, song_name, song_id):
 
     print("%d hashes saved for %s" % (len(hashes), song_name))
 
-import operator
 
 def count_anchor_matches():
     #audiopath = "wav/rec/all_my_life_0.10-0.20.wav"
     #audiopath = "wav/rec/ring_of_fire_0.10-0.20.wav"
     audiopath = "wav/rec/paint_it_black_noise+clipping.wav"
-    song_name = "all_my_life.wav"
-    song_id = db.get_song_id(song_name)
 
     audio_sample = AudioSample(audiopath, 2, 12)
     peaks, spectrum, t, freqs = audio_sample.get_peaks()
