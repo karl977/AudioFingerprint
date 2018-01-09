@@ -1,5 +1,5 @@
 from AudioSample import AudioSample
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import numpy as np
 from Database import DbHelper
 
